@@ -1,0 +1,68 @@
+name: File-Based Workflow Dispatcher
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'folder1/**'
+      - 'folder2/**'
+      - 'folder3/**'
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      changed_files: ${{ steps.changes.outputs.all_changed_files }}
+      matrix: ${{ steps.build-matrix.outputs.matrix }}
+      has_changes: ${{ steps.build-matrix.outputs.has_changes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changes
+        uses: tj-actions/changed-files@v45
+        with:
+          files: |
+            folder1/**
+            folder2/**
+            folder3/**
+
+      - name: Build matrix from changed files
+        id: build-matrix
+        run: |
+          if [ -z "${{ steps.changes.outputs.all_changed_files }}" ]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          MATRIX_JSON='{"include":['
+          FIRST=true
+          for file in ${{ steps.changes.outputs.all_changed_files }}; do
+            FOLDER=$(dirname "$file")
+            FILENAME=$(basename "$file")
+            if [ "$FIRST" = true ]; then
+              FIRST=false
+            else
+              MATRIX_JSON+=","
+            fi
+            MATRIX_JSON+="{\"folder\":\"$FOLDER\",\"file\":\"$FILENAME\",\"path\":\"$file\"}"
+          done
+          MATRIX_JSON+=']}'
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+
+  call-reusable:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_changes == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+    uses: ./.github/workflows/reusable-workflow.yml
+    with:
+      folder_name: ${{ matrix.folder }}
+      file_name: ${{ matrix.file }}
+      file_path: ${{ matrix.path }}
