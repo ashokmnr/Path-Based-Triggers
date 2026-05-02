@@ -1,0 +1,36 @@
+name: Reusable Workflow
+
+on:
+  workflow_call:
+    inputs:
+      folder_name:
+        required: true
+        type: string
+      file_name:
+        required: true
+        type: string
+      file_path:
+        required: true
+        type: string
+    secrets:
+      DEPLOY_TOKEN:
+        required: false
+
+jobs:
+  process-file:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Display file info
+        run: |
+          echo "Folder: ${{ inputs.folder_name }}"
+          echo "File: ${{ inputs.file_name }}"
+          echo "Full path: ${{ inputs.file_path }}"
+
+      - name: Run logic for the file
+        run: |
+          echo "Processing ${{ inputs.file_path }}"
+          # Add your build/test/deploy logic here
+          cat ${{ inputs.file_path }}
