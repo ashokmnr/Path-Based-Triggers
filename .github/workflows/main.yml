@@ -17,13 +17,13 @@ jobs:
       has_changes: ${{ steps.build-matrix.outputs.has_changes }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
 
       - name: Get changed files
         id: changes
-        uses: tj-actions/changed-files@v45
+        uses: tj-actions/changed-files@9426d40962ed5378910ee2e21d5f8c6fcbf2dd96  #v47.0.6 
         with:
           files: |
             folder1/**
