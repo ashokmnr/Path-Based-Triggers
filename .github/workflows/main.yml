@@ -10,20 +10,19 @@ on:
 
 jobs:
   detect-changes:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     outputs:
-      changed_files: ${{ steps.changes.outputs.all_changed_files }}
       matrix: ${{ steps.build-matrix.outputs.matrix }}
       has_changes: ${{ steps.build-matrix.outputs.has_changes }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Get changed files
         id: changes
-        uses: tj-actions/changed-files@9426d40962ed5378910ee2e21d5f8c6fcbf2dd96  #v47.0.6 
+        uses: tj-actions/changed-files@v45
         with:
           files: |
             folder1/**
@@ -32,28 +31,41 @@ jobs:
 
       - name: Build matrix from changed files
         id: build-matrix
+        shell: pwsh
         run: |
-          if [ -z "${{ steps.changes.outputs.all_changed_files }}" ]; then
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-            echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
+          $changedFiles = "${{ steps.changes.outputs.all_changed_files }}"
+          
+          if ([string]::IsNullOrWhiteSpace($changedFiles)) {
+            "has_changes=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            'matrix={"include":[]}' | Out-File -FilePath $env:GITHUB_OUTPUT -Append
             exit 0
-          fi
+          }
 
-          MATRIX_JSON='{"include":['
-          FIRST=true
-          for file in ${{ steps.changes.outputs.all_changed_files }}; do
-            FOLDER=$(dirname "$file")
-            FILENAME=$(basename "$file")
-            if [ "$FIRST" = true ]; then
-              FIRST=false
-            else
-              MATRIX_JSON+=","
-            fi
-            MATRIX_JSON+="{\"folder\":\"$FOLDER\",\"file\":\"$FILENAME\",\"path\":\"$file\"}"
-          done
-          MATRIX_JSON+=']}'
-          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
-          echo "has_changes=true" >> $GITHUB_OUTPUT
+          $files = $changedFiles -split '\s+' | Where-Object { $_ -ne '' }
+          $include = @()
+
+          foreach ($file in $files) {
+            $folder = Split-Path -Path $file -Parent
+            $filename = Split-Path -Path $file -Leaf
+            # Normalize to forward slashes for consistency
+            $folder = $folder -replace '\\', '/'
+            $include += @{
+              folder = $folder
+              file = $filename
+              path = $file
+            }
+          }
+
+          $matrix = @{ include = $include } | ConvertTo-Json -Compress -Depth 5
+          # Ensure single-element arrays stay as arrays
+          if ($include.Count -eq 1) {
+            $matrix = '{"include":[' + (($include[0] | ConvertTo-Json -Compress)) + ']}'
+          }
+
+          "matrix=$matrix" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "has_changes=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          
+          Write-Host "Generated matrix: $matrix"
 
   call-reusable:
     needs: detect-changes
